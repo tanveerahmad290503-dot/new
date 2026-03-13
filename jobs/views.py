@@ -2,7 +2,6 @@ import json
 from datetime import timedelta
 
 from django.shortcuts import render, get_object_or_404, redirect
-from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.db.models import Count
@@ -288,26 +287,6 @@ def dashboard(request):
         context
 
     )
-
-
-@login_required
-def dashboard_updates(request):
-
-    latest_thread = (
-        JobThread.objects
-        .filter(user=request.user)
-        .order_by("-last_activity_at")
-        .first()
-    )
-
-    latest_activity_at = None
-
-    if latest_thread and latest_thread.last_activity_at:
-        latest_activity_at = latest_thread.last_activity_at.isoformat()
-
-    return JsonResponse({
-        "latest_activity_at": latest_activity_at
-    })
 
 
 # =====================================================
