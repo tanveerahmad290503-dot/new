@@ -1,5 +1,6 @@
 {% extends "base.html" %}
 {% block content %}
+<div id="dashboardUpdateWatcher" data-latest-activity="{% if threads and threads.0.last_activity_at %}{{ threads.0.last_activity_at|date:"c" }}{% endif %}"></div>
 
 <!-- ========================= -->
 <!-- FOLLOW-UP ALERTS -->
@@ -214,7 +215,7 @@
             <div class="flex items-center gap-6">
 
                 <span class="px-3 py-1 rounded-lg bg-neutral-700 text-sm">
-                    {{ thread.status }}
+                    {{ thread.display_status }}
                 </span>
 
                 <span class="text-sm text-neutral-400">
@@ -288,5 +289,38 @@
     }
 </script>
 {% endif %}
+
+
+<script>
+(function () {
+    const watcherEl = document.getElementById("dashboardUpdateWatcher");
+
+    if (!watcherEl) return;
+
+
+    const pollForUpdates = async function () {
+        try {
+            const response = await fetch("{% url 'dashboard_updates' %}", {
+                headers: { "X-Requested-With": "XMLHttpRequest" },
+                cache: "no-store"
+            });
+
+            if (!response.ok) return;
+
+            const data = await response.json();
+            const latest = (data && data.latest_activity_at) || "";
+
+            if (latest && latest !== (watcherEl.dataset.latestActivity || "")) {
+                watcherEl.dataset.latestActivity = latest;
+                window.location.reload();
+            }
+        } catch (error) {
+            // silent polling failure
+        }
+    };
+
+    setInterval(pollForUpdates, 15000);
+})();
+</script>
 
 {% endblock %}

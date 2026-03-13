@@ -2,6 +2,7 @@ import json
 from datetime import timedelta
 
 from django.shortcuts import render, get_object_or_404, redirect
+from django.http import JsonResponse
 from django.contrib.auth.decorators import login_required
 from django.views.decorators.http import require_POST
 from django.db.models import Count
@@ -12,6 +13,29 @@ from accounts.models import GmailToken  # ✅ NEW (STEP 6)
 
 from .models import JobThread
 from intelligence.processor import calculate_followups
+
+
+EVENT_TYPE_TO_STATUS = {
+    "APPLICATION_DETECTED": "APPLIED",
+    "INTERVIEW_INVITE": "INTERVIEW_SCHEDULED",
+    "ASSESSMENT_REQUESTED": "ASSESSMENT_PENDING",
+    "ACTION_REQUIRED": "ACTION_REQUIRED",
+    "REJECTION": "REJECTED",
+    "OFFER": "OFFER_RECEIVED",
+    "RECRUITER_REPLY": "RECRUITER_REPLIED",
+}
+
+
+def resolve_thread_display_status(thread):
+    latest_event = thread.events.first()
+
+    if latest_event:
+        return EVENT_TYPE_TO_STATUS.get(
+            latest_event.event_type,
+            thread.status
+        )
+
+    return thread.status
 
 
 # =====================================================
@@ -30,6 +54,9 @@ def dashboard(request):
         .order_by("-last_activity_at")
 
     )
+
+    for thread in threads:
+        thread.display_status = resolve_thread_display_status(thread)
 
     # -------------------------------------------------
     # ✅ STEP 6 — Gmail Connection Status
@@ -261,6 +288,26 @@ def dashboard(request):
         context
 
     )
+
+
+@login_required
+def dashboard_updates(request):
+
+    latest_thread = (
+        JobThread.objects
+        .filter(user=request.user)
+        .order_by("-last_activity_at")
+        .first()
+    )
+
+    latest_activity_at = None
+
+    if latest_thread and latest_thread.last_activity_at:
+        latest_activity_at = latest_thread.last_activity_at.isoformat()
+
+    return JsonResponse({
+        "latest_activity_at": latest_activity_at
+    })
 
 
 # =====================================================
