@@ -14,35 +14,52 @@ from .models import JobThread
 from intelligence.processor import calculate_followups
 
 
+EVENT_TYPE_TO_STATUS = {
+    "APPLICATION_DETECTED": "APPLIED",
+    "INTERVIEW_INVITE": "INTERVIEW_SCHEDULED",
+    "ASSESSMENT_REQUESTED": "ASSESSMENT_PENDING",
+    "ACTION_REQUIRED": "ACTION_REQUIRED",
+    "REJECTION": "REJECTED",
+    "OFFER": "OFFER_RECEIVED",
+    "RECRUITER_REPLY": "RECRUITER_REPLIED",
+}
+
+
+def resolve_thread_display_status(thread):
+    latest_event = thread.events.first()
+
+    if latest_event:
+        return EVENT_TYPE_TO_STATUS.get(
+            latest_event.event_type,
+            thread.status
+        )
+
+    return thread.status
+
+
 # =====================================================
-# DASHBOARD
+# DASHBOARD CONTEXT BUILDER
 # =====================================================
 
-@login_required
-def dashboard(request):
+def build_dashboard_context(user):
 
     threads = (
 
         JobThread.objects
-        .filter(user=request.user)
+        .filter(user=user)
         .select_related("user")
         .prefetch_related("events")
         .order_by("-last_activity_at")
 
     )
 
-    # -------------------------------------------------
-    # ✅ STEP 6 — Gmail Connection Status
-    # -------------------------------------------------
+    for thread in threads:
+        thread.display_status = resolve_thread_display_status(thread)
 
     gmail_connected = GmailToken.objects.filter(
-        user=request.user,
+        user=user,
         is_active=True
     ).exists()
-
-    # ----------------------------
-    # BASIC COUNTS
-    # ----------------------------
 
     total = threads.count()
 
@@ -53,10 +70,6 @@ def dashboard(request):
     offers = threads.filter(
         status="OFFER_RECEIVED"
     ).count()
-
-    # ----------------------------
-    # PENDING COUNT
-    # ----------------------------
 
     pending_statuses = [
 
@@ -84,10 +97,6 @@ def dashboard(request):
 
     )
 
-    # ----------------------------
-    # INTERVIEW CONVERSION %
-    # ----------------------------
-
     interview_conversion = (
 
         round((interviews / total) * 100, 1)
@@ -95,20 +104,12 @@ def dashboard(request):
 
     )
 
-    # ----------------------------
-    # OFFER RATE %
-    # ----------------------------
-
     offer_rate = (
 
         round((offers / total) * 100, 1)
         if total else 0
 
     )
-
-    # ----------------------------
-    # AVG TIME TO OFFER
-    # ----------------------------
 
     offer_threads = threads.filter(
         status="OFFER_RECEIVED"
@@ -141,10 +142,6 @@ def dashboard(request):
         if time_deltas else 0
 
     )
-
-    # ----------------------------
-    # WEEKLY APPLICATIONS
-    # ----------------------------
 
     weekly_queryset = (
 
@@ -186,10 +183,6 @@ def dashboard(request):
 
     ]
 
-    # ----------------------------
-    # RECENT UPDATES (7 DAYS)
-    # ----------------------------
-
     seven_days_ago = (
 
         timezone.now() -
@@ -204,19 +197,11 @@ def dashboard(request):
 
     ).count()
 
-    # ----------------------------
-    # FOLLOWUPS
-    # ----------------------------
-
     followups = calculate_followups(
-        request.user
+        user
     )
 
-    # ----------------------------
-    # CONTEXT
-    # ----------------------------
-
-    context = {
+    return {
 
         "threads": threads,
 
@@ -235,7 +220,6 @@ def dashboard(request):
         "avg_time_to_offer":
         avg_time_to_offer,
 
-        # JS SAFE
         "weekly_data":
         json.dumps(weekly_data),
 
@@ -248,16 +232,39 @@ def dashboard(request):
         "followup_count":
         len(followups),
 
-        # ✅ STEP 6 UX
         "gmail_connected":
         gmail_connected,
 
     }
 
+
+# =====================================================
+# DASHBOARD
+# =====================================================
+
+@login_required
+def dashboard(request):
+
+    context = build_dashboard_context(request.user)
+
     return render(
 
         request,
         "dashboard.html",
+        context
+
+    )
+
+
+@login_required
+def dashboard_partial(request):
+
+    context = build_dashboard_context(request.user)
+
+    return render(
+
+        request,
+        "dashboard/_dashboard_content.html",
         context
 
     )
