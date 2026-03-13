@@ -1,4 +1,5 @@
 import base64
+import re
 from datetime import datetime
 
 from django.utils import timezone
@@ -94,6 +95,26 @@ def extract_email_body(payload):
     return body
 
 
+def strip_quoted_content(text):
+
+    if not text:
+        return ""
+
+    cleaned_lines = []
+
+    for line in text.splitlines():
+        if line.lstrip().startswith(">"):
+            continue
+        cleaned_lines.append(line)
+
+    cleaned = "\n".join(cleaned_lines)
+
+    # Common "On ... wrote:" marker in replies
+    cleaned = re.split(r"\nOn .+ wrote:\s*", cleaned, maxsplit=1)[0]
+
+    return cleaned.strip()
+
+
 # ==========================================================
 # SAVE MESSAGE
 # ==========================================================
@@ -150,6 +171,8 @@ def save_message(service, user, msg_id):
     body_text = extract_email_body(
         message.get("payload", {})
     )
+
+    body_text = strip_quoted_content(body_text)
 
     RawEmail.objects.get_or_create(
 

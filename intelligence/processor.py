@@ -29,7 +29,8 @@ def process_unprocessed_emails(user):
             event_type, confidence = classify_email(
                 email.subject,
                 email.sender,
-                email.snippet
+                email.snippet,
+                email.body_text,
             )
 
             # --------------------------------------------------
